@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install mbstring pdo pdo_mysql pdo_sqlite zip xml
 
 # ----------------------------------------------------
-# Copy project files
+# Copy project
 # ----------------------------------------------------
 COPY . /var/www/html
 WORKDIR /var/www/html
@@ -27,16 +27,18 @@ RUN mkdir -p storage/framework/views \
     && mkdir -p storage/framework/cache \
     && mkdir -p storage/framework/sessions \
     && mkdir -p bootstrap/cache \
-    && touch storage/framework/views/.gitignore \
-    && touch storage/framework/cache/.gitignore \
-    && touch storage/framework/sessions/.gitignore \
     && chmod -R 775 storage bootstrap/cache \
     && chown -R www-data:www-data /var/www/html
 
 # ----------------------------------------------------
-# Remove prebuilt Laravel cache (important)
+# Remove cached Laravel config (prevents HTTP 500)
 # ----------------------------------------------------
 RUN rm -f bootstrap/cache/*.php
+
+# ----------------------------------------------------
+# Create storage symlink (VERY IMPORTANT)
+# ----------------------------------------------------
+RUN php artisan storage:link || true
 
 # ----------------------------------------------------
 # Nginx configuration
@@ -55,7 +57,7 @@ RUN echo 'server { \
 }' > /etc/nginx/conf.d/default.conf
 
 # ----------------------------------------------------
-# Supervisor config (runs Nginx + PHP-FPM together)
+# Supervisor config
 # ----------------------------------------------------
 RUN echo '[supervisord]\n\
 nodaemon=true\n\n\
