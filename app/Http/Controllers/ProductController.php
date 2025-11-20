@@ -52,7 +52,9 @@ class ProductController extends Controller
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $file) {
                 if ($file) {
-                    $storedImages[] = $file->store('products', 'public');
+                    $contents = file_get_contents($file->getRealPath());
+                    $mime = $file->getClientMimeType() ?: 'application/octet-stream';
+                    $storedImages[] = 'data:' . $mime . ';base64,' . base64_encode($contents);
                 }
             }
         }
@@ -111,7 +113,9 @@ class ProductController extends Controller
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $file) {
                 if ($file) {
-                    $storedImages[] = $file->store('products', 'public');
+                    $contents = file_get_contents($file->getRealPath());
+                    $mime = $file->getClientMimeType() ?: 'application/octet-stream';
+                    $storedImages[] = 'data:' . $mime . ';base64,' . base64_encode($contents);
                 }
             }
         }
