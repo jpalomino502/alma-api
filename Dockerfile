@@ -15,6 +15,12 @@ WORKDIR /var/www/html
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 RUN composer install --no-dev --optimize-autoloader
 
+# Generate Laravel cache files
+RUN php artisan config:clear && \
+    php artisan route:clear && \
+    php artisan view:clear && \
+    php artisan optimize
+
 # Fix permissions for Laravel
 RUN mkdir -p /var/www/html/storage/framework/{views,cache,sessions} \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache \
