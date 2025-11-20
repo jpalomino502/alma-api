@@ -2,12 +2,13 @@ FROM php:8.2-fpm
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    git curl unzip libonig-dev libxml2-dev libzip-dev zip nginx supervisor sqlite3
+    git curl unzip libonig-dev libxml2-dev libzip-dev zip \
+    nginx supervisor sqlite3 default-mysql-client
 
 # Install PHP extensions
-RUN docker-php-ext-install pdo pdo_mysql pdo_sqlite mbstring zip xml
+RUN docker-php-ext-install mbstring pdo pdo_mysql pdo_sqlite zip xml
 
-# Copy project
+# Copy project files
 COPY . /var/www/html
 WORKDIR /var/www/html
 
@@ -15,13 +16,13 @@ WORKDIR /var/www/html
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 RUN composer install --no-dev --optimize-autoloader
 
-# Generate Laravel cache files
+# Generate Laravel optimized files
 RUN php artisan config:clear && \
     php artisan route:clear && \
     php artisan view:clear && \
     php artisan optimize
 
-# Fix permissions for Laravel
+# Fix permissions
 RUN mkdir -p /var/www/html/storage/framework/{views,cache,sessions} \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache \
     && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
