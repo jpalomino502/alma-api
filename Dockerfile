@@ -1,34 +1,38 @@
-# Usar PHP 8.2 con FPM
-FROM php:8.2-fpm
+# ============================================================
+# Etapa 1: PHP + Composer + dependencias Laravel
+# ============================================================
+FROM php:8.2-fpm AS php-build
 
-# Instalar dependencias del sistema y extensiones PHP necesarias
 RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    curl \
-    libzip-dev \
-    sqlite3 \
-    libsqlite3-dev \
-    && docker-php-ext-install pdo pdo_mysql pdo_sqlite zip
+    git unzip libzip-dev libpng-dev sqlite3 libsqlite3-dev libonig-dev \
+    && docker-php-ext-install pdo pdo_sqlite zip
 
-# Instalar Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Establecer directorio de trabajo
-WORKDIR /var/www
+WORKDIR /var/www/html
 
-# Copiar todo el código del proyecto
 COPY . .
 
-# Instalar dependencias de Laravel
-RUN composer install --optimize-autoloader --no-dev
+RUN composer install --no-interaction --prefer-dist --optimize-autoloader
 
-# Crear carpetas de cache y storage con permisos correctos
-RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache
+RUN chown -R www-data:www-data storage bootstrap/cache
 
-# Exponer puerto para Render
-EXPOSE 10000
 
-# Comando para iniciar Laravel
-CMD php artisan serve --host=0.0.0.0 --port=10000
+# ============================================================
+# Etapa 2: PHP + NGINX + Supervisor
+# ============================================================
+FROM php:8.2-fpm
+
+RUN apt-get update && apt-get install -y \
+    nginx supervisor sqlite3 libsqlite3-dev
+
+COPY ./docker/nginx.conf /etc/nginx/sites-enabled/default
+COPY ./docker/supervisor.conf /etc/supervisor/conf.d/supervisor.conf
+
+WORKDIR /var/www/html
+
+COPY --from=php-build /var/www/html ./
+
+EXPOSE 80
+
+CMD ["supervisord", "-n"]
