@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install mbstring pdo pdo_mysql pdo_sqlite zip xml
 
 # ----------------------------------------------------
-# Copy project
+# Copy project files
 # ----------------------------------------------------
 COPY . /var/www/html
 WORKDIR /var/www/html
@@ -21,23 +21,20 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 RUN composer install --no-dev --optimize-autoloader
 
 # ----------------------------------------------------
-# Fix Laravel permissions
+# Permissions for Laravel
 # ----------------------------------------------------
 RUN mkdir -p storage/framework/{views,cache,sessions} \
     && mkdir -p bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache
+    && chown -R www-data:www-data storage bootstrap/cache /var/www/html
 
 # ----------------------------------------------------
-# Clear caches
+# Clear prebuilt caches (very important)
 # ----------------------------------------------------
-RUN php artisan config:clear || true
-RUN php artisan route:clear || true
-RUN php artisan view:clear || true
-RUN php artisan optimize || true
+RUN rm -f bootstrap/cache/*.php
 
 # ----------------------------------------------------
-# Configure Nginx
+# Nginx configuration
 # ----------------------------------------------------
 RUN rm -f /etc/nginx/sites-enabled/default
 RUN echo 'server { \
@@ -53,11 +50,11 @@ RUN echo 'server { \
 }' > /etc/nginx/conf.d/default.conf
 
 # ----------------------------------------------------
-# Supervisor for Nginx + PHP-FPM
+# Supervisor: run both Nginx + PHP-FPM
 # ----------------------------------------------------
 RUN echo '[supervisord]\nnodaemon=true\n\n\
-[program:php-fpm]\ncommand=/usr/local/sbin/php-fpm -F\n\n\
-[program:nginx]\ncommand=nginx -g "daemon off;"\n' \
+[program:php-fpm]\ncommand=/usr/local/sbin/php-fpm -F\nautostart=true\nautorestart=true\n\n\
+[program:nginx]\ncommand=nginx -g "daemon off;"\nautostart=true\nautorestart=true\n' \
 > /etc/supervisor/conf.d/supervisord.conf
 
 EXPOSE 8080
