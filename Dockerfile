@@ -41,17 +41,26 @@ RUN rm -f bootstrap/cache/*.php
 RUN php artisan storage:link || true
 
 # ----------------------------------------------------
-# Nginx configuration
+# Nginx configuration (WITH STORAGE FIX)
 # ----------------------------------------------------
 RUN rm -f /etc/nginx/sites-enabled/default
 RUN echo 'server { \
     listen 8080; \
     root /var/www/html/public; \
     index index.php index.html; \
-    location /storage/ {
-    alias /var/www/html/storage/app/public/;
-    try_files $uri $uri/ =404;
-} \
+\
+    # Public Laravel routes
+    location / { \
+        try_files $uri $uri/ /index.php?$query_string; \
+    } \
+\
+    # FIX: Allow access to /storage
+    location /storage/ { \
+        alias /var/www/html/storage/app/public/; \
+        try_files $uri $uri/ =404; \
+    } \
+\
+    # PHP handling
     location ~ \.php$$ { \
         include fastcgi_params; \
         fastcgi_pass 127.0.0.1:9000; \
