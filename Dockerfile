@@ -48,7 +48,10 @@ RUN echo 'server { \
     listen 8080; \
     root /var/www/html/public; \
     index index.php index.html; \
-    location / { try_files $uri $uri/ /index.php?$query_string; } \
+    location /storage/ {
+    alias /var/www/html/storage/app/public/;
+    try_files $uri $uri/ =404;
+} \
     location ~ \.php$$ { \
         include fastcgi_params; \
         fastcgi_pass 127.0.0.1:9000; \
