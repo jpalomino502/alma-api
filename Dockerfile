@@ -1,18 +1,31 @@
 FROM php:8.2-fpm
 
+# ----------------------------------------------------
+# Install system dependencies
+# ----------------------------------------------------
 RUN apt-get update && apt-get install -y \
     git curl unzip nginx supervisor sqlite3 \
     libonig-dev libxml2-dev libzip-dev libpng-dev zlib1g-dev libsqlite3-dev \
     && docker-php-ext-install mbstring pdo pdo_mysql pdo_sqlite zip xml
 
+# ----------------------------------------------------
+# Copy project files
+# ----------------------------------------------------
 COPY . /var/www/html
 WORKDIR /var/www/html
 
+# ----------------------------------------------------
+# Install Composer dependencies
+# ----------------------------------------------------
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 RUN composer install --no-dev --optimize-autoloader
 
-# Correct storage structure and permissions
-RUN mkdir -p storage/framework/{views,cache,sessions} \
+# ----------------------------------------------------
+# Fix Laravel storage paths + permissions
+# ----------------------------------------------------
+RUN mkdir -p storage/framework/views \
+    && mkdir -p storage/framework/cache \
+    && mkdir -p storage/framework/sessions \
     && mkdir -p bootstrap/cache \
     && touch storage/framework/views/.gitignore \
     && touch storage/framework/cache/.gitignore \
@@ -20,10 +33,14 @@ RUN mkdir -p storage/framework/{views,cache,sessions} \
     && chmod -R 775 storage bootstrap/cache \
     && chown -R www-data:www-data /var/www/html
 
-# Remove any previous Laravel cache (VERY IMPORTANT)
+# ----------------------------------------------------
+# Remove prebuilt Laravel cache (important)
+# ----------------------------------------------------
 RUN rm -f bootstrap/cache/*.php
 
-# Nginx config
+# ----------------------------------------------------
+# Nginx configuration
+# ----------------------------------------------------
 RUN rm -f /etc/nginx/sites-enabled/default
 RUN echo 'server { \
     listen 8080; \
@@ -37,10 +54,19 @@ RUN echo 'server { \
     } \
 }' > /etc/nginx/conf.d/default.conf
 
-# Supervisor
-RUN echo '[supervisord]\nnodaemon=true\n\n\
-[program:php-fpm]\ncommand=/usr/local/sbin/php-fpm -F\nautostart=true\nautorestart=true\n\n\
-[program:nginx]\ncommand=nginx -g "daemon off;"\nautostart=true\nautorestart=true\n' \
+# ----------------------------------------------------
+# Supervisor config (runs Nginx + PHP-FPM together)
+# ----------------------------------------------------
+RUN echo '[supervisord]\n\
+nodaemon=true\n\n\
+[program:php-fpm]\n\
+command=/usr/local/sbin/php-fpm -F\n\
+autostart=true\n\
+autorestart=true\n\n\
+[program:nginx]\n\
+command=nginx -g "daemon off;"\n\
+autostart=true\n\
+autorestart=true\n' \
 > /etc/supervisor/conf.d/supervisord.conf
 
 EXPOSE 8080
