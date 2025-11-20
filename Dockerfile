@@ -7,12 +7,6 @@ RUN apt-get update && apt-get install -y \
 # Install PHP extensions
 RUN docker-php-ext-install pdo pdo_mysql pdo_sqlite mbstring zip xml
 
-# Configure PHP-FPM
-COPY ./docker/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
-
-# Configure Nginx
-COPY ./docker/nginx.conf /etc/nginx/nginx.conf
-
 # Copy project
 COPY . /var/www/html
 WORKDIR /var/www/html
@@ -21,17 +15,32 @@ WORKDIR /var/www/html
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 RUN composer install --no-dev --optimize-autoloader
 
-# FIX PERMISSIONS (VERY IMPORTANT)
-RUN mkdir -p /var/www/html/storage/framework/views \
-    /var/www/html/storage/framework/cache \
-    /var/www/html/storage/framework/sessions && \
-    chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache && \
-    chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# Fix permissions for Laravel
+RUN mkdir -p /var/www/html/storage/framework/{views,cache,sessions} \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Expose port
-EXPOSE 80
+# Configure Nginx
+RUN rm /etc/nginx/sites-enabled/default
+RUN echo 'server { \
+    listen 8080; \
+    root /var/www/html/public; \
+    index index.php index.html; \
+    location / { try_files $uri $uri/ /index.php?$query_string; } \
+    location ~ \.php$$ { \
+        fastcgi_pass 127.0.0.1:9000; \
+        fastcgi_index index.php; \
+        include fastcgi_params; \
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
 
-# Supervisor configuration
-COPY ./docker/supervisor.conf /etc/supervisor/conf.d/supervisor.conf
+# Supervisor config
+RUN echo '[supervisord]\nnodaemon=true\n\n\
+[program:php-fpm]\ncommand=/usr/local/sbin/php-fpm -F\n\n\
+[program:nginx]\ncommand=nginx -g "daemon off;"\n' \
+> /etc/supervisor/conf.d/supervisord.conf
 
-CMD ["/usr/bin/supervisord", "-n"]
+EXPOSE 8080
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
