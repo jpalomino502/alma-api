@@ -1,38 +1,37 @@
-# ============================================================
-# Etapa 1: PHP + Composer + dependencias Laravel
-# ============================================================
-FROM php:8.2-fpm AS php-build
-
-RUN apt-get update && apt-get install -y \
-    git unzip libzip-dev libpng-dev sqlite3 libsqlite3-dev libonig-dev \
-    && docker-php-ext-install pdo pdo_sqlite zip
-
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-WORKDIR /var/www/html
-
-COPY . .
-
-RUN composer install --no-interaction --prefer-dist --optimize-autoloader
-
-RUN chown -R www-data:www-data storage bootstrap/cache
-
-
-# ============================================================
-# Etapa 2: PHP + NGINX + Supervisor
-# ============================================================
 FROM php:8.2-fpm
 
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    nginx supervisor sqlite3 libsqlite3-dev
+    git curl unzip libonig-dev libxml2-dev libzip-dev zip nginx supervisor sqlite3
 
-COPY ./docker/nginx.conf /etc/nginx/sites-enabled/default
-COPY ./docker/supervisor.conf /etc/supervisor/conf.d/supervisor.conf
+# Install PHP extensions
+RUN docker-php-ext-install pdo pdo_mysql pdo_sqlite mbstring zip xml
 
+# Configure PHP-FPM
+COPY ./docker/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
+
+# Configure Nginx
+COPY ./docker/nginx.conf /etc/nginx/nginx.conf
+
+# Copy project
+COPY . /var/www/html
 WORKDIR /var/www/html
 
-COPY --from=php-build /var/www/html ./
+# Install Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+RUN composer install --no-dev --optimize-autoloader
 
+# FIX PERMISSIONS (VERY IMPORTANT)
+RUN mkdir -p /var/www/html/storage/framework/views \
+    /var/www/html/storage/framework/cache \
+    /var/www/html/storage/framework/sessions && \
+    chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache && \
+    chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Expose port
 EXPOSE 80
 
-CMD ["supervisord", "-n"]
+# Supervisor configuration
+COPY ./docker/supervisor.conf /etc/supervisor/conf.d/supervisor.conf
+
+CMD ["/usr/bin/supervisord", "-n"]
